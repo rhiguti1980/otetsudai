@@ -1,30 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-
-// ── お手伝い＆おこづかい管理アプリ「おてつだいボード」 ──────────
-// データは共有ストレージに保存（このアーティファクトを開いた家族全員で同期）
-// キー設計:
-//   board:chores    → お手伝いの配列
-//   board:notes     → 「やるよ！」通知の配列
-//   board:expenses  → 必要経費の申請の配列
-//   board:settings  → 娘の名前など
-
-const STORE = {
-  async load(key, fallback) {
-    try {
-      const r = await window.storage.get(key, true);
-      return r ? JSON.parse(r.value) : fallback;
-    } catch {
-      return fallback;
-    }
-  },
-  async save(key, value) {
-    try {
-      await window.storage.set(key, JSON.stringify(value), true);
-    } catch (e) {
-      console.error("save failed", e);
-    }
-  },
-};
+import { STORE } from "./src/store.js";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 

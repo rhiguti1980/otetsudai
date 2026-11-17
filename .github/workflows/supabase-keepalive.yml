@@ -1,0 +1,56 @@
+name: Supabase keepalive
+
+on:
+  schedule:
+    # UTC 00:17 / 08:17 / 16:17 = JST 09:17 / 17:17 / 01:17 (next day).
+    - cron: '17 0,8,16 * * *'
+  workflow_dispatch:
+
+# No checkout or GitHub API access is needed.
+permissions: {}
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Read at most one settings row
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_ANON_KEY:-}" ]]; then
+            echo '::error::SUPABASE_URL and SUPABASE_ANON_KEY must be configured.'
+            exit 1
+          fi
+
+          if [[ "$SUPABASE_URL" != https://* || "$SUPABASE_URL" == *$'\n'* || "$SUPABASE_URL" == *$'\r'* || "$SUPABASE_ANON_KEY" == *$'\n'* || "$SUPABASE_ANON_KEY" == *$'\r'* ]]; then
+            echo '::error::Invalid Supabase configuration; use an HTTPS project URL and a single-line anon key.'
+            exit 1
+          fi
+
+          # GET only. Do not follow redirects or log credentials or response data.
+          if ! http_status=$(curl --silent --fail \
+            --proto '=https' \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --request GET \
+            --header "apikey: ${SUPABASE_ANON_KEY}" \
+            --header "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            --header 'Accept: application/json' \
+            --output /dev/null \
+            --write-out '%{http_code}' \
+            "${SUPABASE_URL%/}/rest/v1/settings?select=*&limit=1"); then
+            echo '::error::Supabase read failed (HTTP error, connection failure, or timeout).'
+            exit 1
+          fi
+
+          if [[ ! "$http_status" =~ ^2[0-9]{2}$ ]]; then
+            echo '::error::Supabase returned a non-success HTTP status.'
+            exit 1
+          fi
+
+          echo 'Supabase settings read succeeded (limit=1).'
